@@ -107,3 +107,7 @@ All non-class Go code passes through unchanged.
 go test ./...
 ```
 
+## General
+
+* Version: 1.0.0
+* License: The Unlicense
