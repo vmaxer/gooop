@@ -90,6 +90,58 @@ class Child extends Base {
 	}
 }
 
+func TestStringLiteralPreserved(t *testing.T) {
+	input := `package main
+
+import "fmt"
+
+class Mailer {
+	Addr string
+
+	new(addr string) {
+		this.Addr = addr
+	}
+
+	func Send() {
+		fmt.Println("sending to this address: user@host")
+		x := "this thing" + this.Addr
+		fmt.Println(x)
+	}
+}
+`
+	out := transpile(input)
+	if !strings.Contains(out, `"sending to this address: user@host"`) {
+		t.Fatalf("string literal corrupted:\n%s", out)
+	}
+	if !strings.Contains(out, `"this thing"`) {
+		t.Fatalf("string literal corrupted:\n%s", out)
+	}
+	if !strings.Contains(out, "m.Addr") {
+		t.Fatalf("this.Addr not rewritten outside string:\n%s", out)
+	}
+}
+
+func TestCommentPreserved(t *testing.T) {
+	input := `package main
+
+class Foo {
+	V int
+
+	func Bar() int {
+		// this is a comment, return @V here
+		return this.V
+	}
+}
+`
+	out := transpile(input)
+	if !strings.Contains(out, "// this is a comment, return @V here") {
+		t.Fatalf("comment corrupted:\n%s", out)
+	}
+	if !strings.Contains(out, "return f.V") {
+		t.Fatalf("this.V not rewritten:\n%s", out)
+	}
+}
+
 func TestMultipleFields(t *testing.T) {
 	input := `package main
 

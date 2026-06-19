@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode"
 )
-
-var atFieldRe = regexp.MustCompile(`@(\w)`)
 
 type Generator struct {
 	buf strings.Builder
@@ -110,21 +107,8 @@ func (g *Generator) emitConstructor(c ClassDecl, recv string) {
 	g.buf.WriteString(fmt.Sprintf("\nfunc New%s(%s) *%s {\n", c.Name, params, c.Name))
 	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, c.Name))
 
-	body := tokensToString(c.Ctor.Body)
-	body = rewriteSelf(body, recv)
-	body = rewritePrivateFields(body, recv, c.Fields)
-
-	if c.Parent != "" {
-		body = transformSuper(body, c.Parent, recv)
-	}
-
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		g.buf.WriteString("\t" + trimmed + "\n")
-	}
+	body := rewriteBody(c.Ctor.Body, recv, c.Parent, c.Fields, nil)
+	g.writeBodyLines(body)
 
 	parentAbstract := findParentAbstract(c)
 	if parentAbstract != "" {
@@ -201,14 +185,7 @@ func (g *Generator) emitStaticMethod(className string, m Method) {
 		results = " " + results
 	}
 	g.buf.WriteString(fmt.Sprintf("\nfunc %s%s(%s)%s {\n", className, m.Name, params, results))
-	body := tokensToString(m.Body)
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		g.buf.WriteString("\t" + trimmed + "\n")
-	}
+	g.writeBodyLines(tokensToString(m.Body))
 	g.buf.WriteString("}\n")
 }
 
@@ -226,14 +203,12 @@ func (g *Generator) emitMethod(className, recv, parent string, m Method, fields 
 	g.buf.WriteString(fmt.Sprintf("\nfunc (%s *%s) %s%s(%s)%s {\n",
 		recv, className, m.Name, typeParams, params, results))
 
-	body := tokensToString(m.Body)
-	body = rewriteSelf(body, recv)
-	body = rewritePrivateFields(body, recv, fields)
-	if parent != "" {
-		body = rewriteSuperMethod(body, parent, recv)
-	}
-	body = rewriteAbstractCalls(body, recv, abstractNames)
+	body := rewriteBody(m.Body, recv, parent, fields, abstractNames)
+	g.writeBodyLines(body)
+	g.buf.WriteString("}\n")
+}
 
+func (g *Generator) writeBodyLines(body string) {
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
@@ -241,67 +216,84 @@ func (g *Generator) emitMethod(className, recv, parent string, m Method, fields 
 		}
 		g.buf.WriteString("\t" + trimmed + "\n")
 	}
-	g.buf.WriteString("}\n")
 }
 
-func transformSuper(body, parent, recv string) string {
-	for {
-		idx := strings.Index(body, "super(")
-		if idx < 0 {
-			break
-		}
-		end := idx + 6
-		depth := 1
-		for end < len(body) && depth > 0 {
-			if body[end] == '(' {
-				depth++
-			} else if body[end] == ')' {
-				depth--
+func rewriteBody(toks []Token, recv, parent string, fields []Field, abstractNames []string) string {
+	priv := privateFieldMap(fields)
+	abs := nameSet(abstractNames)
+	var out []Token
+	for i := 0; i < len(toks); i++ {
+		t := toks[i]
+		switch {
+		case t.Kind == TokString || t.Kind == TokRune || isComment(t):
+			out = append(out, t)
+		case t.Kind == TokOp && t.Value == "@" && i+1 < len(toks) && toks[i+1].Kind == TokIdent:
+			name := toks[i+1].Value
+			out = append(out,
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokDot, Value: "."},
+				Token{Kind: TokIdent, Value: mapName(name, priv)})
+			i++
+		case t.Kind == TokIdent && t.Value == "this" && i+2 < len(toks) && toks[i+1].Kind == TokDot && toks[i+2].Kind == TokIdent:
+			name := toks[i+2].Value
+			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS}, Token{Kind: TokDot, Value: "."})
+			if abs[name] && i+3 < len(toks) && toks[i+3].Kind == TokLParen {
+				out = append(out, Token{Kind: TokIdent, Value: "_iface"}, Token{Kind: TokDot, Value: "."})
 			}
-			end++
+			out = append(out, Token{Kind: TokIdent, Value: mapName(name, priv)})
+			i += 2
+		case t.Kind == TokIdent && t.Value == "this":
+			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS})
+		case t.Kind == TokIdent && t.Value == "super" && parent != "" && i+1 < len(toks) && toks[i+1].Kind == TokDot:
+			out = append(out,
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokDot, Value: "."},
+				Token{Kind: TokIdent, Value: parent})
+		case t.Kind == TokIdent && t.Value == "super" && parent != "" && i+1 < len(toks) && toks[i+1].Kind == TokLParen:
+			out = append(out,
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokDot, Value: "."},
+				Token{Kind: TokIdent, Value: parent},
+				Token{Kind: TokOp, Value: "=", PreWS: " "},
+				Token{Kind: TokOp, Value: "*", PreWS: " "},
+				Token{Kind: TokIdent, Value: "New" + parent})
+		default:
+			out = append(out, t)
 		}
-		args := body[idx+6 : end-1]
-		replacement := fmt.Sprintf("%s.%s = *New%s(%s)", recv, parent, parent, args)
-		body = body[:idx] + replacement + body[end:]
 	}
-	return body
+	return tokensToString(out)
 }
 
-var superMethodRe = regexp.MustCompile(`super\.(\w+)`)
-
-func rewriteSuperMethod(body, parent, recv string) string {
-	return superMethodRe.ReplaceAllString(body, recv+"."+parent+".${1}")
+func isComment(t Token) bool {
+	return t.Kind == TokOp && (strings.HasPrefix(t.Value, "//") || strings.HasPrefix(t.Value, "/*"))
 }
 
-func rewriteSelf(body, recv string) string {
-	body = atFieldRe.ReplaceAllString(body, recv+".${1}")
-	body = strings.ReplaceAll(body, "this.", recv+".")
-	body = strings.ReplaceAll(body, "this", recv)
-	return body
+func mapName(name string, priv map[string]string) string {
+	if mapped, ok := priv[name]; ok {
+		return mapped
+	}
+	return name
 }
 
-func rewritePrivateFields(body, recv string, fields []Field) string {
+func privateFieldMap(fields []Field) map[string]string {
+	m := map[string]string{}
 	for _, f := range fields {
 		if !f.Private {
 			continue
 		}
 		for _, n := range f.Names {
-			lowered := unexport(n)
-			if lowered != n {
-				body = strings.ReplaceAll(body, recv+"."+n, recv+"."+lowered)
-			}
+			m[n] = unexport(n)
 		}
 	}
-	return body
+	return m
 }
 
-func rewriteAbstractCalls(body, recv string, abstractNames []string) string {
-	for _, name := range abstractNames {
-		old := recv + "." + name + "("
-		new := recv + "._iface." + name + "("
-		body = strings.ReplaceAll(body, old, new)
+func nameSet(names []string) map[string]bool {
+	m := map[string]bool{}
+	for _, n := range names {
+		m[n] = true
 	}
-	return body
+	return m
 }
 
 func abstractMethodNames(c ClassDecl) []string {
