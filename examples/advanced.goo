@@ -1,0 +1,64 @@
+package main
+
+import "fmt"
+
+class Base {
+	Name string
+
+	new(name string) {
+		this.Name = name
+	}
+
+	func Greet() string {
+		return "Hello, " + this.Name
+	}
+}
+
+class Fancy extends Base {
+	Prefix string
+
+	new(name string, prefix string) {
+		super(name)
+		this.Prefix = prefix
+	}
+
+	func Greet() string {
+		base := super.Greet()
+		return this.Prefix + " " + base
+	}
+}
+
+class Widget {
+	private ID    int
+	private state string
+	Label string
+
+	new(id int, label string) {
+		this.ID = id
+		this.state = "init"
+		this.Label = label
+	}
+
+	func GetID() int {
+		return this.ID
+	}
+
+	func Activate() {
+		this.state = "active"
+	}
+
+	func Status() string {
+		return fmt.Sprintf("%s[%d]: %s", this.Label, this.ID, this.state)
+	}
+}
+
+func main() {
+	f := NewFancy("World", "***")
+	fmt.Println(f.Greet())
+
+	w := NewWidget(42, "Button")
+	fmt.Println(w.Status())
+	w.Activate()
+	fmt.Println(w.Status())
+	fmt.Println(w.GetID())
+}

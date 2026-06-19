@@ -1,0 +1,49 @@
+package main
+
+import "fmt"
+
+class Node {
+	Value int
+	Left  *Node
+	Right *Node
+
+	new(value int) {
+		this.Value = value
+	}
+
+	func Insert(v int) {
+		if v < this.Value {
+			if this.Left == nil {
+				this.Left = NewNode(v)
+			} else {
+				this.Left.Insert(v)
+			}
+		} else {
+			if this.Right == nil {
+				this.Right = NewNode(v)
+			} else {
+				this.Right.Insert(v)
+			}
+		}
+	}
+
+	func InOrder() []int {
+		var result []int
+		if this.Left != nil {
+			result = append(result, this.Left.InOrder()...)
+		}
+		result = append(result, this.Value)
+		if this.Right != nil {
+			result = append(result, this.Right.InOrder()...)
+		}
+		return result
+	}
+}
+
+func main() {
+	root := NewNode(5)
+	for _, v := range []int{3, 7, 1, 4, 6, 8} {
+		root.Insert(v)
+	}
+	fmt.Println(root.InOrder())
+}

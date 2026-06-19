@@ -1,0 +1,45 @@
+package main
+
+import "fmt"
+
+class EventEmitter {
+	listeners map[string][]func(string)
+
+	new() {
+		this.listeners = make(map[string][]func(string))
+	}
+
+	func On(event string, fn func(string)) {
+		this.listeners[event] = append(this.listeners[event], fn)
+	}
+
+	func Emit(event string, data string) {
+		for _, fn := range this.listeners[event] {
+			fn(data)
+		}
+	}
+}
+
+class Logger extends EventEmitter {
+	Prefix string
+
+	new(prefix string) {
+		super()
+		this.Prefix = prefix
+	}
+
+	func Log(msg string) {
+		full := this.Prefix + ": " + msg
+		fmt.Println(full)
+		this.Emit("log", full)
+	}
+}
+
+func main() {
+	log := NewLogger("[APP]")
+	log.On("log", func(msg string) {
+		fmt.Println("  -> captured:", msg)
+	})
+	log.Log("starting up")
+	log.Log("ready")
+}

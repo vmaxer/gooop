@@ -1,0 +1,41 @@
+package main
+
+import "fmt"
+
+class Timestamped {
+	CreatedAt string
+
+	new() {
+		this.CreatedAt = "now"
+	}
+}
+
+class Serializable {
+	Format string
+
+	new() {
+		this.Format = "json"
+	}
+
+	func Serialize() string {
+		return fmt.Sprintf("{format: %s}", this.Format)
+	}
+}
+
+class Record includes Timestamped, Serializable {
+	ID   int
+	Name string
+
+	new(id int, name string) {
+		this.ID = id
+		this.Name = name
+		this.CreatedAt = "2024-01-01"
+		this.Format = "json"
+	}
+}
+
+func main() {
+	r := NewRecord(1, "test")
+	fmt.Println(r.ID, r.Name, r.CreatedAt)
+	fmt.Println(r.Serialize())
+}

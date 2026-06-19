@@ -1,0 +1,25 @@
+package main
+
+import "fmt"
+
+data class Point {
+	X, Y float64
+}
+
+data class Color {
+	R, G, B uint8
+}
+
+func main() {
+	p1 := NewPoint(1.0, 2.0)
+	p2 := NewPoint(1.0, 2.0)
+	p3 := p1.Copy()
+	p3.X = 99
+
+	fmt.Println(p1)
+	fmt.Println(p1.Equal(p2))
+	fmt.Println(p1.Equal(p3))
+
+	c := NewColor(255, 128, 0)
+	fmt.Println(c)
+}

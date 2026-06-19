@@ -1,0 +1,47 @@
+package main
+
+import "fmt"
+
+class Animal {
+	Name string
+	Age  int
+
+	new(name string, age int) {
+		this.Name = name
+		this.Age = age
+	}
+
+	func Speak() string {
+		return this.Name + " speaks"
+	}
+
+	func String() string {
+		return fmt.Sprintf("%s (age %d)", this.Name, this.Age)
+	}
+}
+
+class Dog extends Animal {
+	Breed string
+
+	new(name string, age int, breed string) {
+		super(name, age)
+		this.Breed = breed
+	}
+
+	func Speak() string {
+		return this.Name + " barks"
+	}
+
+	func Fetch() string {
+		return this.Name + " fetches the ball"
+	}
+}
+
+func main() {
+	a := NewAnimal("Cat", 3)
+	d := NewDog("Rex", 5, "Labrador")
+	fmt.Println(a.Speak())
+	fmt.Println(d.Speak())
+	fmt.Println(d.Fetch())
+	fmt.Println(d.String())
+}

@@ -1,0 +1,55 @@
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+class Vec2 {
+	X, Y float64
+
+	new(x, y float64) {
+		@X = x
+		@Y = y
+	}
+
+	func +(other *Vec2) *Vec2 {
+		return NewVec2(@X+other.X, @Y+other.Y)
+	}
+
+	func -(other *Vec2) *Vec2 {
+		return NewVec2(@X-other.X, @Y-other.Y)
+	}
+
+	func *(s float64) *Vec2 {
+		return NewVec2(@X*s, @Y*s)
+	}
+
+	func ==(other *Vec2) bool {
+		return @X == other.X && @Y == other.Y
+	}
+
+	func Length() float64 {
+		return math.Sqrt(@X*@X + @Y*@Y)
+	}
+
+	static func Zero() *Vec2 {
+		return NewVec2(0, 0)
+	}
+
+	static func Unit(angle float64) *Vec2 {
+		return NewVec2(math.Cos(angle), math.Sin(angle))
+	}
+}
+
+func main() {
+	a := NewVec2(3, 4)
+	b := NewVec2(1, 2)
+	fmt.Println(a.Add(b))
+	fmt.Println(a.Sub(b))
+	fmt.Println(a.Mul(2))
+	fmt.Println(a.Eq(b))
+	fmt.Printf("len=%.2f\n", a.Length())
+	fmt.Println(Vec2Zero())
+	fmt.Println(Vec2Unit(0))
+}

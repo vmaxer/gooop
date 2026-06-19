@@ -1,0 +1,60 @@
+package main
+
+import "fmt"
+
+abstract class Shape {
+	Name string
+
+	new(name string) {
+		this.Name = name
+	}
+
+	abstract func Area() float64
+	abstract func Perimeter() float64
+
+	func Describe() string {
+		return fmt.Sprintf("%s: area=%.2f perimeter=%.2f", this.Name, this.Area(), this.Perimeter())
+	}
+}
+
+class Circle extends Shape implements ShapeInterface {
+	Radius float64
+
+	new(r float64) {
+		super("Circle")
+		this.Radius = r
+	}
+
+	func Area() float64 {
+		return 3.14159 * this.Radius * this.Radius
+	}
+
+	func Perimeter() float64 {
+		return 2 * 3.14159 * this.Radius
+	}
+}
+
+class Rect extends Shape implements ShapeInterface {
+	W, H float64
+
+	new(w, h float64) {
+		super("Rect")
+		this.W = w
+		this.H = h
+	}
+
+	func Area() float64 {
+		return this.W * this.H
+	}
+
+	func Perimeter() float64 {
+		return 2 * (this.W + this.H)
+	}
+}
+
+func main() {
+	shapes := []ShapeInterface{NewCircle(5), NewRect(3, 4)}
+	for _, s := range shapes {
+		fmt.Println(s.Describe())
+	}
+}
