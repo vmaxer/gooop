@@ -7,9 +7,18 @@ import (
 	"os"
 )
 
+const versionString = "Go++ (Go + OOP) 1.0.0"
+
 func main() {
 	outFile := flag.String("o", "", "output file (default: stdout)")
+	versionFlag := flag.Bool("version", false, "display the current version")
+	versionShort := flag.Bool("v", false, "display the current version")
 	flag.Parse()
+
+	if *versionFlag || *versionShort {
+		fmt.Println(versionString)
+		return
+	}
 
 	var src []byte
 	var err error
@@ -26,7 +35,11 @@ func main() {
 
 	tokens := NewLexer(string(src)).Tokenize()
 	file := NewParser(tokens).Parse()
-	out := NewGenerator().Generate(file)
+	gen := NewGenerator()
+	if flag.NArg() > 0 {
+		gen.SetFile(flag.Arg(0))
+	}
+	out := gen.Generate(file)
 
 	if *outFile != "" {
 		err = os.WriteFile(*outFile, []byte(out), 0644)

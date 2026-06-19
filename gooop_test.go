@@ -14,6 +14,36 @@ func transpile(input string) string {
 	return NewGenerator().Generate(file)
 }
 
+func transpileFile(input, name string) string {
+	tokens := NewLexer(input).Tokenize()
+	file := NewParser(tokens).Parse()
+	g := NewGenerator()
+	g.SetFile(name)
+	return g.Generate(file)
+}
+
+func TestLineDirectives(t *testing.T) {
+	input := `package main
+
+class Box {
+	W int
+
+	func Area() int {
+		return this.W * this.W
+	}
+}
+`
+	out := transpileFile(input, "box.goo")
+	for _, want := range []string{"//line box.goo:1", "//line box.goo:3", "//line box.goo:6", "//line box.goo:7"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing directive %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(transpile(input), "//line") {
+		t.Fatalf("directives should be omitted without a filename")
+	}
+}
+
 func TestPassthrough(t *testing.T) {
 	input := `package main
 

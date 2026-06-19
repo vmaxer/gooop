@@ -20,6 +20,7 @@ type ClassDecl struct {
 	Fields     []Field
 	Ctor       *Constructor
 	Methods    []Method
+	Line       int
 }
 
 type Field struct {
@@ -31,6 +32,7 @@ type Field struct {
 type Constructor struct {
 	Params []Token
 	Body   []Token
+	Line   int
 }
 
 type Method struct {
@@ -42,6 +44,7 @@ type Method struct {
 	IsStatic   bool
 	IsAbstract bool
 	Operator   string
+	Line       int
 }
 
 func (RawDecl) declNode()   {}

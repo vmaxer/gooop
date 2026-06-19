@@ -7,11 +7,22 @@ import (
 )
 
 type Generator struct {
-	buf strings.Builder
+	buf  strings.Builder
+	file string
 }
 
 func NewGenerator() *Generator {
 	return &Generator{}
+}
+
+func (g *Generator) SetFile(name string) {
+	g.file = name
+}
+
+func (g *Generator) lineDirective(line int) {
+	if g.file != "" && line > 0 {
+		fmt.Fprintf(&g.buf, "//line %s:%d\n", g.file, line)
+	}
 }
 
 func (g *Generator) Generate(f *File) string {
@@ -27,7 +38,12 @@ func (g *Generator) Generate(f *File) string {
 }
 
 func (g *Generator) emitRaw(d RawDecl) {
+	anchored := false
 	for _, t := range d.Tokens {
+		if !anchored && t.Kind != TokNewline && t.Line > 0 {
+			g.lineDirective(t.Line)
+			anchored = true
+		}
 		g.buf.WriteString(t.PreWS)
 		g.buf.WriteString(t.Value)
 	}
@@ -42,7 +58,9 @@ func (g *Generator) emitClass(c ClassDecl) {
 		g.emitAbstractInterface(c)
 	}
 
-	g.buf.WriteString(fmt.Sprintf("\ntype %s struct {\n", c.Name))
+	g.buf.WriteString("\n")
+	g.lineDirective(c.Line)
+	g.buf.WriteString(fmt.Sprintf("type %s struct {\n", c.Name))
 	if c.Parent != "" {
 		g.buf.WriteString(fmt.Sprintf("\t%s\n", c.Parent))
 	}
@@ -104,11 +122,13 @@ func (g *Generator) emitAbstractInterface(c ClassDecl) {
 
 func (g *Generator) emitConstructor(c ClassDecl, recv string) {
 	params := tokensToString(c.Ctor.Params)
-	g.buf.WriteString(fmt.Sprintf("\nfunc New%s(%s) *%s {\n", c.Name, params, c.Name))
+	g.buf.WriteString("\n")
+	g.lineDirective(c.Ctor.Line)
+	g.buf.WriteString(fmt.Sprintf("func New%s(%s) *%s {\n", c.Name, params, c.Name))
 	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, c.Name))
 
 	body := rewriteBody(c.Ctor.Body, recv, c.Parent, c.Fields, nil)
-	g.writeBodyLines(body)
+	g.writeBodyTokens(body)
 
 	parentAbstract := findParentAbstract(c)
 	if parentAbstract != "" {
@@ -184,8 +204,10 @@ func (g *Generator) emitStaticMethod(className string, m Method) {
 	if results != "" {
 		results = " " + results
 	}
-	g.buf.WriteString(fmt.Sprintf("\nfunc %s%s(%s)%s {\n", className, m.Name, params, results))
-	g.writeBodyLines(tokensToString(m.Body))
+	g.buf.WriteString("\n")
+	g.lineDirective(m.Line)
+	g.buf.WriteString(fmt.Sprintf("func %s%s(%s)%s {\n", className, m.Name, params, results))
+	g.writeBodyTokens(m.Body)
 	g.buf.WriteString("}\n")
 }
 
@@ -200,25 +222,46 @@ func (g *Generator) emitMethod(className, recv, parent string, m Method, fields 
 		results = " " + results
 	}
 
-	g.buf.WriteString(fmt.Sprintf("\nfunc (%s *%s) %s%s(%s)%s {\n",
+	g.buf.WriteString("\n")
+	g.lineDirective(m.Line)
+	g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s%s(%s)%s {\n",
 		recv, className, m.Name, typeParams, params, results))
 
 	body := rewriteBody(m.Body, recv, parent, fields, abstractNames)
-	g.writeBodyLines(body)
+	g.writeBodyTokens(body)
 	g.buf.WriteString("}\n")
 }
 
-func (g *Generator) writeBodyLines(body string) {
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+func (g *Generator) writeBodyTokens(toks []Token) {
+	var line []Token
+	flush := func() {
+		s := strings.TrimSpace(tokensToString(line))
+		if s != "" {
+			g.lineDirective(firstLineOf(line))
+			g.buf.WriteString("\t" + s + "\n")
+		}
+		line = line[:0]
+	}
+	for _, t := range toks {
+		if t.Kind == TokNewline {
+			flush()
 			continue
 		}
-		g.buf.WriteString("\t" + trimmed + "\n")
+		line = append(line, t)
 	}
+	flush()
 }
 
-func rewriteBody(toks []Token, recv, parent string, fields []Field, abstractNames []string) string {
+func firstLineOf(toks []Token) int {
+	for _, t := range toks {
+		if t.Line > 0 {
+			return t.Line
+		}
+	}
+	return 0
+}
+
+func rewriteBody(toks []Token, recv, parent string, fields []Field, abstractNames []string) []Token {
 	priv := privateFieldMap(fields)
 	abs := nameSet(abstractNames)
 	var out []Token
@@ -230,28 +273,28 @@ func rewriteBody(toks []Token, recv, parent string, fields []Field, abstractName
 		case t.Kind == TokOp && t.Value == "@" && i+1 < len(toks) && toks[i+1].Kind == TokIdent:
 			name := toks[i+1].Value
 			out = append(out,
-				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS, Line: t.Line},
 				Token{Kind: TokDot, Value: "."},
 				Token{Kind: TokIdent, Value: mapName(name, priv)})
 			i++
 		case t.Kind == TokIdent && t.Value == "this" && i+2 < len(toks) && toks[i+1].Kind == TokDot && toks[i+2].Kind == TokIdent:
 			name := toks[i+2].Value
-			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS}, Token{Kind: TokDot, Value: "."})
+			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS, Line: t.Line}, Token{Kind: TokDot, Value: "."})
 			if abs[name] && i+3 < len(toks) && toks[i+3].Kind == TokLParen {
 				out = append(out, Token{Kind: TokIdent, Value: "_iface"}, Token{Kind: TokDot, Value: "."})
 			}
 			out = append(out, Token{Kind: TokIdent, Value: mapName(name, priv)})
 			i += 2
 		case t.Kind == TokIdent && t.Value == "this":
-			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS})
+			out = append(out, Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS, Line: t.Line})
 		case t.Kind == TokIdent && t.Value == "super" && parent != "" && i+1 < len(toks) && toks[i+1].Kind == TokDot:
 			out = append(out,
-				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS, Line: t.Line},
 				Token{Kind: TokDot, Value: "."},
 				Token{Kind: TokIdent, Value: parent})
 		case t.Kind == TokIdent && t.Value == "super" && parent != "" && i+1 < len(toks) && toks[i+1].Kind == TokLParen:
 			out = append(out,
-				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS},
+				Token{Kind: TokIdent, Value: recv, PreWS: t.PreWS, Line: t.Line},
 				Token{Kind: TokDot, Value: "."},
 				Token{Kind: TokIdent, Value: parent},
 				Token{Kind: TokOp, Value: "=", PreWS: " "},
@@ -261,7 +304,7 @@ func rewriteBody(toks []Token, recv, parent string, fields []Field, abstractName
 			out = append(out, t)
 		}
 	}
-	return tokensToString(out)
+	return out
 }
 
 func isComment(t Token) bool {

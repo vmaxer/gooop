@@ -73,7 +73,7 @@ func (p *Parser) isClassStart() bool {
 }
 
 func (p *Parser) parseClass() ClassDecl {
-	c := ClassDecl{}
+	c := ClassDecl{Line: p.peek().Line}
 
 	if p.peek().Value == "abstract" {
 		c.IsAbstract = true
@@ -184,7 +184,7 @@ func (p *Parser) collectUntilNewlineOrBrace() []Token {
 }
 
 func (p *Parser) parseConstructor() *Constructor {
-	ctor := &Constructor{}
+	ctor := &Constructor{Line: p.peek().Line}
 	p.advance()
 	ctor.Params = p.collectBalanced(TokLParen, TokRParen)
 	p.skipNewlines()
@@ -193,7 +193,7 @@ func (p *Parser) parseConstructor() *Constructor {
 }
 
 func (p *Parser) parseMethodOrOperator() Method {
-	m := Method{}
+	m := Method{Line: p.peek().Line}
 	p.advance()
 	p.skipNewlines()
 
