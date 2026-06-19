@@ -316,6 +316,34 @@ class Thing includes Mixin {
 	}
 }
 
+func TestReceiverClash(t *testing.T) {
+	input := `package main
+
+class Box {
+	Items [10]int
+	Count int
+
+	new() {
+		this.Count = 0
+	}
+
+	func Fill(vals []int) {
+		for _, b := range vals {
+			this.Items[this.Count] = b
+			this.Count++
+		}
+	}
+}
+`
+	out := transpile(input)
+	if strings.Contains(out, "for _, b := range vals") && strings.Contains(out, "(b *Box)") {
+		t.Fatalf("receiver clashes with loop var:\n%s", out)
+	}
+	if !strings.Contains(out, "func (bo *Box)") {
+		t.Fatalf("expected longer receiver name 'bo':\n%s", out)
+	}
+}
+
 func TestExamplesCompile(t *testing.T) {
 	examples, _ := filepath.Glob("examples/*.goo")
 	if len(examples) == 0 {

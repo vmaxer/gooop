@@ -37,7 +37,7 @@ func (g *Generator) emitRaw(d RawDecl) {
 }
 
 func (g *Generator) emitClass(c ClassDecl) {
-	recv := strings.ToLower(c.Name[:1])
+	recv := chooseReceiver(c)
 
 	abstractNames := abstractMethodNames(c)
 
@@ -312,6 +312,60 @@ func abstractMethodNames(c ClassDecl) []string {
 		}
 	}
 	return names
+}
+
+func chooseReceiver(c ClassDecl) string {
+	used := collectBodyIdents(c)
+	candidate := strings.ToLower(c.Name[:1])
+	if !used[candidate] {
+		return candidate
+	}
+	for i := 2; i <= len(c.Name); i++ {
+		candidate = strings.ToLower(c.Name[:i])
+		if !used[candidate] {
+			return candidate
+		}
+	}
+	return strings.ToLower(c.Name)
+}
+
+func collectBodyIdents(c ClassDecl) map[string]bool {
+	idents := map[string]bool{}
+	var allTokens []Token
+	if c.Ctor != nil {
+		allTokens = append(allTokens, c.Ctor.Body...)
+	}
+	for _, m := range c.Methods {
+		allTokens = append(allTokens, m.Body...)
+	}
+	for i, t := range allTokens {
+		if t.Kind != TokIdent {
+			continue
+		}
+		if t.Value == "this" || t.Value == "super" {
+			continue
+		}
+		for j := i + 1; j < len(allTokens); j++ {
+			next := allTokens[j]
+			if next.Kind == TokNewline || next.Kind == TokEOF {
+				break
+			}
+			if next.Kind == TokOp && (next.Value == ":=" || next.Value == "=") {
+				idents[t.Value] = true
+				break
+			}
+			if next.Kind != TokIdent {
+				break
+			}
+		}
+		if i > 0 {
+			prev := allTokens[i-1]
+			if prev.Kind == TokComma || (prev.Kind == TokIdent && prev.Value == "range") {
+				idents[t.Value] = true
+			}
+		}
+	}
+	return idents
 }
 
 func findParentAbstract(c ClassDecl) string {
