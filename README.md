@@ -1,6 +1,8 @@
 # gooop
 
-A transpiler from Go++ (`.goo`) to Go. Adds classes with full OOP to Go.
+Go++ (Go + OOP).
+
+This is a transpiler from Go++ (`.goo`) to Go. Adds classes with full OOP to Go.
 
 ## Install
 
@@ -12,8 +14,19 @@ go install github.com/vmaxer/gooop@latest
 
 ```
 gooop input.goo > output.go
+gooop -o output.go input.goo
 cat input.goo | gooop > output.go
+gooop -v
 ```
+
+With `go generate`:
+
+```go
+//go:generate gooop -o game_gen.go game.goo
+```
+
+When given a file argument, gooop emits `//line input.goo:N` directives so Go
+compiler errors point back to the original `.goo` source line.
 
 ## Syntax
 
